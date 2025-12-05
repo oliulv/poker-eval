@@ -1,0 +1,29 @@
+{
+  "fast": {
+    "gameId": "demo-fast-001",
+    "mode": "fast",
+    "startedAt": 1700000000000,
+    "hands": [],
+    "finalRankings": [
+      { "model": "openai", "chips": 2500, "rank": 1 },
+      { "model": "anthropic", "chips": 1500, "rank": 2 },
+      { "model": "google", "chips": 1000, "rank": 3 },
+      { "model": "grok", "chips": 500, "rank": 4 },
+      { "model": "meta", "chips": 0, "rank": 5 }
+    ]
+  },
+  "smart": {
+    "gameId": "demo-smart-001",
+    "mode": "smart",
+    "startedAt": 1700000000000,
+    "hands": [],
+    "finalRankings": [
+      { "model": "anthropic", "chips": 3000, "rank": 1 },
+      { "model": "openai", "chips": 2000, "rank": 2 },
+      { "model": "google", "chips": 0, "rank": 3 },
+      { "model": "grok", "chips": 0, "rank": 4 },
+      { "model": "meta", "chips": 0, "rank": 5 }
+    ]
+  }
+}
+
