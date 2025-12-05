@@ -1,7 +1,7 @@
 'use client';
 
 interface GameControlsProps {
-  mode: 'fast' | 'smart' | null;
+  mode: 'fast' | 'smart';
   onModeChange: (mode: 'fast' | 'smart') => void;
   onStart: () => void;
   isPlaying: boolean;
@@ -14,46 +14,59 @@ export default function GameControls({
   isPlaying,
 }: GameControlsProps) {
   return (
-    <div className="flex flex-col gap-4 items-center">
-      <div className="flex gap-4">
+    <div className="flex flex-col items-center gap-8 w-full max-w-md">
+      {/* Mode Toggle */}
+      <div className="relative bg-gray-100 dark:bg-gray-800 p-1 rounded-full flex w-full">
+        <div
+          className={`absolute inset-y-1 w-[calc(50%-4px)] bg-white dark:bg-black rounded-full shadow-sm transition-all duration-300 ease-in-out ${
+            mode === 'smart' ? 'translate-x-[calc(100%+4px)]' : 'translate-x-1'
+          }`}
+        ></div>
+        
         <button
           onClick={() => onModeChange('fast')}
-          className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-            mode === 'fast'
-              ? 'bg-green-600 text-white shadow-lg'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
           disabled={isPlaying}
+          className={`relative z-10 flex-1 py-3 text-sm font-medium transition-colors rounded-full ${
+            mode === 'fast' ? 'text-foreground' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
         >
           Fast Mode
-          <div className="text-xs font-normal mt-1">Small Models</div>
+          <span className="block text-[10px] font-normal opacity-60 mt-0.5">Small Models</span>
         </button>
+        
         <button
           onClick={() => onModeChange('smart')}
-          className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-            mode === 'smart'
-              ? 'bg-purple-600 text-white shadow-lg'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
           disabled={isPlaying}
+          className={`relative z-10 flex-1 py-3 text-sm font-medium transition-colors rounded-full ${
+            mode === 'smart' ? 'text-foreground' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
         >
           Smart Mode
-          <div className="text-xs font-normal mt-1">Large Models</div>
+          <span className="block text-[10px] font-normal opacity-60 mt-0.5">Large Models</span>
         </button>
       </div>
-      
+
+      {/* Start Button */}
       <button
         onClick={onStart}
-        disabled={!mode || isPlaying}
-        className={`px-8 py-4 rounded-lg font-bold text-lg transition-all ${
-          mode && !isPlaying
-            ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl'
-            : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-        }`}
+        disabled={isPlaying}
+        className={`
+          w-full py-4 px-8 rounded-full font-medium text-lg transition-all transform active:scale-95
+          ${isPlaying 
+            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+            : 'bg-foreground text-background hover:bg-foreground/90 shadow-lg hover:shadow-xl'}
+        `}
       >
-        {isPlaying ? 'Game in Progress...' : 'Start Game'}
+        {isPlaying ? (
+          <span className="flex items-center justify-center gap-2">
+            <span className="w-2 h-2 bg-current rounded-full animate-bounce"></span>
+            <span className="w-2 h-2 bg-current rounded-full animate-bounce delay-100"></span>
+            <span className="w-2 h-2 bg-current rounded-full animate-bounce delay-200"></span>
+          </span>
+        ) : (
+          'Start Simulation'
+        )}
       </button>
     </div>
   );
 }
-

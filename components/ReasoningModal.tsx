@@ -18,30 +18,46 @@ export default function ReasoningModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-gray-900 text-white p-6 rounded-lg border-2 border-amber-500 max-w-2xl w-full mx-4"
+        className="vercel-card w-full max-w-lg mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold">{model} - {action}</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white text-2xl"
-          >
-            ×
-          </button>
-        </div>
-        
-        <div className="bg-gray-800 p-4 rounded border border-gray-700">
-          {reasoning ? (
-            <p className="text-gray-200">{reasoning}</p>
-          ) : (
-            <p className="text-gray-400 italic">Loading reasoning...</p>
-          )}
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h2 className="text-xl font-bold">{model}</h2>
+              <p className="text-sm text-gray-500 uppercase tracking-wider mt-1 font-mono">
+                ACTION: <span className="text-foreground">{action}</span>
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-foreground transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-100 dark:border-gray-800">
+            <h3 className="text-xs font-bold uppercase text-gray-400 mb-2">Reasoning Trace</h3>
+            {reasoning ? (
+              <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap">
+                {reasoning}
+              </p>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-gray-400 font-mono">
+                <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce"></span>
+                <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce delay-100"></span>
+                <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce delay-200"></span>
+                <span>Extracting thoughts...</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

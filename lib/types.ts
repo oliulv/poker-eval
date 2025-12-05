@@ -82,14 +82,14 @@ export const MODEL_CONFIG = {
   fast: {
     openai: 'gpt-4o-mini',
     anthropic: 'claude-3-haiku-20240307',
-    google: 'gemini-1.5-flash',
+    google: 'gemini-2.0-flash-001',
     grok: 'grok-2-1212',
     meta: 'llama-3.1-8b-instruct',
   },
   smart: {
     openai: 'gpt-4o',
     anthropic: 'claude-3-5-sonnet-20241022',
-    google: 'gemini-1.5-pro',
+    google: 'gemini-2.0-flash-001',
     grok: 'grok-2-1212',
     meta: 'llama-3.1-70b-instruct',
   },

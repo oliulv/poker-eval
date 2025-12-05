@@ -35,15 +35,69 @@ export function createGame(mode: 'fast' | 'smart', gameId: string): GameState {
   };
 }
 
+export function getMajorityWinner(players: Player[], pot: number): Player | null {
+  const totalChips = players.reduce((sum, p) => sum + p.chips, 0) + pot;
+  if (totalChips === 0) return null;
+
+  const leader = players.reduce<Player | null>((current, player) => {
+    if (!current) return player;
+    return player.chips > current.chips ? player : current;
+  }, null);
+
+  if (
+    leader &&
+    leader.chips >= totalChips / 2 &&
+    players.filter(p => p.chips === leader.chips).length === 1
+  ) {
+    return leader;
+  }
+
+  return null;
+}
+
 export function startNewHand(gameState: GameState): GameState {
-  const activePlayers = gameState.players.filter(p => p.isActive && p.chips > 0);
-  
+  const resetPlayers = gameState.players.map(player => {
+    const hasChips = player.chips > 0;
+    return {
+      ...player,
+      holeCards: null,
+      isActive: hasChips,
+      isAllIn: false,
+      currentBet: 0,
+      totalBetThisRound: 0,
+    };
+  });
+
+  const majorityWinner = getMajorityWinner(resetPlayers, gameState.pot);
+  if (majorityWinner) {
+    console.log(`[GAME-STATE] ${majorityWinner.model} controls >=50% of chips, game finished`);
+    return {
+      ...gameState,
+      players: resetPlayers,
+      pot: 0,
+      currentBet: 0,
+      communityCards: [],
+      phase: 'finished',
+    };
+  }
+
+  const activePlayers = resetPlayers.filter(p => p.isActive);
+  console.log(`[GAME-STATE] Starting new hand. Active players: ${activePlayers.length}`);
+
   if (activePlayers.length < 2) {
-    return { ...gameState, phase: 'finished' };
+    console.log(`[GAME-STATE] Not enough players (${activePlayers.length}), marking game as finished`);
+    return {
+      ...gameState,
+      players: resetPlayers,
+      pot: 0,
+      currentBet: 0,
+      communityCards: [],
+      phase: 'finished',
+    };
   }
 
   // Rotate dealer/blinds - find next active players
-  const activeIndices = gameState.players
+  const activeIndices = resetPlayers
     .map((p, idx) => ({ p, idx }))
     .filter(({ p }) => p.isActive && p.chips > 0)
     .map(({ idx }) => idx);
@@ -64,7 +118,7 @@ export function startNewHand(gameState: GameState): GameState {
 
   // Deal cards
   const deck = shuffleDeck(createDeck());
-  const newPlayers = gameState.players.map(player => {
+  const newPlayers = resetPlayers.map(player => {
     if (!player.isActive || player.chips === 0) {
       return { ...player, holeCards: null, currentBet: 0, totalBetThisRound: 0 };
     }
@@ -203,15 +257,41 @@ export function applyAction(
     }
   }
 
-  // Move to next player
-  const activePlayers = newPlayers.filter(
-    (p, idx) => p.isActive && p.chips > 0 && idx !== gameState.currentPlayerIndex
-  );
-  
-  if (activePlayers.length === 0) {
-    // Game over
+  const updatedActionHistory = [...gameState.actionHistory, actionLog];
+  const activePlayers = newPlayers.filter(p => p.isActive && p.chips > 0);
+
+  if (activePlayers.length <= 1) {
+    const winnerIdx =
+      activePlayers.length === 1
+        ? newPlayers.findIndex(p => p.id === activePlayers[0].id)
+        : newPlayers.findIndex(p => p.chips > 0);
+
+    if (winnerIdx >= 0) {
+      newPlayers[winnerIdx] = {
+        ...newPlayers[winnerIdx],
+        chips: newPlayers[winnerIdx].chips + newPot,
+      };
+    }
+
+    newPot = 0;
+
+    const winnerModel = winnerIdx >= 0 ? newPlayers[winnerIdx].model : 'None';
+    console.log(`[GAME-STATE] Hand ended early. Winner: ${winnerModel}. Pot awarded.`);
+
+    const postHandState: GameState = {
+      ...gameState,
+      players: newPlayers,
+      pot: 0,
+      currentBet: 0,
+      communityCards: [],
+      phase: 'finished',
+      actionHistory: updatedActionHistory,
+    };
+
+    const nextState = startNewHand(postHandState);
+
     return {
-      newState: { ...gameState, players: newPlayers, pot: newPot, phase: 'finished' },
+      newState: nextState,
       actionLog,
     };
   }
@@ -305,14 +385,32 @@ export function applyAction(
         });
       }
       newPot = 0;
+      console.log(`[GAME-STATE] Showdown complete. Winners: ${winners.join(', ')}. Pot distributed.`);
+      
       // Start new hand
+      const newState = startNewHand({
+        ...gameState,
+        players: newPlayers,
+        pot: newPot,
+        communityCards: [],
+        actionHistory: updatedActionHistory,
+      });
+      
+      console.log(`[GAME-STATE] New hand state. Phase: ${newState.phase}, Hand: ${newState.handNumber}`);
+      
+      // If only one player left, mark as truly finished
+      const activePlayers = newState.players.filter(p => p.chips > 0);
+      if (activePlayers.length < 2) {
+        console.log(`[GAME-STATE] Only ${activePlayers.length} player(s) left, game finished`);
+        return {
+          newState,
+          actionLog,
+        };
+      }
+
+      console.log(`[GAME-STATE] New hand ready. ${activePlayers.length} players active.`);
       return {
-        newState: startNewHand({
-          ...gameState,
-          players: newPlayers,
-          pot: newPot,
-          communityCards: [],
-        }),
+        newState,
         actionLog,
       };
     }
@@ -337,7 +435,7 @@ export function applyAction(
       currentPlayerIndex: nextPlayerIndex,
       phase: nextPhase,
       communityCards: newCommunityCards,
-      actionHistory: [...gameState.actionHistory, actionLog],
+      actionHistory: updatedActionHistory,
     },
     actionLog,
   };
@@ -363,4 +461,3 @@ function determineWinners(players: Player[], communityCards: Card[]): string[] {
 
   return winners;
 }
-

@@ -8,50 +8,38 @@ interface CommunityCardsProps {
 }
 
 export default function CommunityCards({ cards, phase }: CommunityCardsProps) {
-  const getPhaseLabel = () => {
-    switch (phase) {
-      case 'preflop':
-        return '';
-      case 'flop':
-        return 'Flop';
-      case 'turn':
-        return 'Turn';
-      case 'river':
-        return 'River';
-      default:
-        return '';
-    }
-  };
+  const slots = [0, 1, 2, 3, 4]; // 5 slots for community cards
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      {getPhaseLabel() && (
-        <div className="text-white font-bold text-sm bg-black/60 px-3 py-1 rounded">
-          {getPhaseLabel()}
-        </div>
-      )}
-      <div className="flex gap-2">
-        {cards.map((card, idx) => (
+    <div className="flex gap-2">
+      {slots.map((_, idx) => {
+        const card = cards[idx];
+        return (
           <div
             key={idx}
-            className="w-12 h-16 bg-white text-black rounded-lg flex flex-col items-center justify-center border-2 border-gray-400 shadow-lg"
+            className={`
+              w-10 h-14 sm:w-12 sm:h-16 rounded-lg flex flex-col items-center justify-center border shadow-sm transition-all duration-300
+              ${card 
+                ? 'bg-white border-gray-200 transform scale-100 opacity-100' 
+                : 'bg-gray-100 dark:bg-gray-800 border-dashed border-gray-300 dark:border-gray-700 transform scale-95 opacity-50'}
+            `}
           >
-            <div className={`text-lg font-bold ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'text-red-600' : 'text-black'}`}>
-              {card.rank}
-            </div>
-            <div className="text-xl">
-              {card.suit === 'hearts' && '♥'}
-              {card.suit === 'diamonds' && '♦'}
-              {card.suit === 'clubs' && '♣'}
-              {card.suit === 'spades' && '♠'}
-            </div>
+            {card && (
+              <>
+                <div className={`text-sm sm:text-base font-bold leading-none ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'text-red-500' : 'text-black'}`}>
+                  {card.rank}
+                </div>
+                <div className={`text-xs sm:text-sm leading-none ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'text-red-500' : 'text-black'}`}>
+                  {card.suit === 'hearts' && '♥'}
+                  {card.suit === 'diamonds' && '♦'}
+                  {card.suit === 'clubs' && '♣'}
+                  {card.suit === 'spades' && '♠'}
+                </div>
+              </>
+            )}
           </div>
-        ))}
-        {cards.length === 0 && (
-          <div className="text-white/50 text-sm">Waiting for cards...</div>
-        )}
-      </div>
+        );
+      })}
     </div>
   );
 }
-

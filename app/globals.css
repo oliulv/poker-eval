@@ -2,7 +2,20 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #000000;
+  --accents-1: #fafafa;
+  --accents-2: #eaeaea;
+  --accents-3: #999999;
+  --accents-4: #888888;
+  --accents-5: #666666;
+  --accents-6: #444444;
+  --accents-7: #333333;
+  --accents-8: #111111;
+  --success: #0070f3;
+  --error: #ee0000;
+  --warning: #f5a623;
+  --cyan: #79ffe1;
+  --purple: #f81ce5;
 }
 
 @theme inline {
@@ -14,13 +27,43 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #000000;
+    --foreground: #ffffff;
+    --accents-1: #111111;
+    --accents-2: #333333;
+    --accents-3: #444444;
+    --accents-4: #666666;
+    --accents-5: #888888;
+    --accents-6: #999999;
+    --accents-7: #eaeaea;
+    --accents-8: #fafafa;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Vercel-style utilities */
+.vercel-btn {
+  @apply inline-flex items-center justify-center rounded-full px-6 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background;
+}
+
+.vercel-btn-primary {
+  @apply bg-foreground text-background hover:bg-foreground/90;
+}
+
+.vercel-btn-secondary {
+  @apply border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 bg-background text-foreground;
+}
+
+.vercel-card {
+  @apply rounded-lg border border-gray-200 dark:border-gray-800 bg-background text-foreground shadow-sm transition-all hover:border-gray-300 dark:hover:border-gray-700;
+}
+
+.vercel-input {
+  @apply flex h-10 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
 }

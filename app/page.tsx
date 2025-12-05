@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { GameState, ActionLog as ActionLogType } from '@/lib/types';
+import type { GameState } from '@/lib/types';
 import PokerTable from '@/components/PokerTable';
 import GameControls from '@/components/GameControls';
 import Leaderboard from '@/components/Leaderboard';
@@ -10,7 +10,7 @@ import ReplayControls from '@/components/ReplayControls';
 import ReasoningModal from '@/components/ReasoningModal';
 
 export default function Home() {
-  const [mode, setMode] = useState<'fast' | 'smart' | null>(null);
+  const [mode, setMode] = useState<'fast' | 'smart'>('fast');
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isReplaying, setIsReplaying] = useState(false);
@@ -19,9 +19,16 @@ export default function Home() {
   const [selectedAction, setSelectedAction] = useState<{ index: number; model: string; action: string } | null>(null);
   const [reasoning, setReasoning] = useState<string | null>(null);
 
+  const findMajorityWinner = (state: GameState | null) => {
+    if (!state || state.players.length === 0) return null;
+    const totalChips = state.players.reduce((sum, p) => sum + p.chips, 0) + state.pot;
+    if (totalChips === 0) return null;
+    const leader = state.players.reduce((current, player) => (player.chips > current.chips ? player : current), state.players[0]);
+    const isUniqueLeader = state.players.filter(p => p.chips === leader.chips).length === 1;
+    return leader.chips >= totalChips / 2 && isUniqueLeader ? leader : null;
+  };
+
   const startGame = async () => {
-    if (!mode) return;
-    
     setIsPlaying(true);
     try {
       const response = await fetch('/api/game/start', {
@@ -43,6 +50,8 @@ export default function Home() {
 
   const processNextAction = async (gameId: string) => {
     try {
+      console.log(`[GAME] Processing next action for game ${gameId}`);
+      
       const response = await fetch('/api/game/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -50,20 +59,70 @@ export default function Home() {
       });
       
       const data = await response.json();
-      setGameState(data.state);
       
-      // If game is finished, stop processing
-      if (data.state.phase === 'finished') {
+      // Check if response has error
+      if (!response.ok || data.error) {
+        console.error(`[GAME] API Error:`, data.error || 'Unknown error', 'Status:', response.status);
+        
+        // If game finished error, check if we should continue
+        if (response.status === 400 && data.error === 'Game finished') {
+          console.log(`[GAME] Game finished, checking final state...`);
+          // Fetch final state to see if there's a winner
+          const stateResponse = await fetch(`/api/game/${gameId}`);
+          const stateData = await stateResponse.json();
+          
+          if (stateData.state) {
+            const majorityWinner = findMajorityWinner(stateData.state);
+            if (majorityWinner) {
+              console.log(`[GAME] Game truly finished. Winner:`, majorityWinner.model);
+              setGameState(stateData.state);
+              setIsPlaying(false);
+              return;
+            }
+
+            console.log(`[GAME] Game marked finished without a majority winner.`);
+            setIsPlaying(false);
+            return;
+          }
+        }
+        
         setIsPlaying(false);
         return;
+      }
+      
+      // Validate response has state
+      if (!data.state) {
+        console.error(`[GAME] Response missing state:`, data);
+        setIsPlaying(false);
+        return;
+      }
+      
+      console.log(`[GAME] Action processed. Phase: ${data.state.phase}, Hand: ${data.state.handNumber}, Current Player: ${data.state.currentPlayerIndex}`);
+      console.log(`[GAME] Player chips:`, data.state.players.map((p: any) => `${p.model}: ${p.chips}`).join(', '));
+      
+      setGameState(data.state);
+      
+      // Check if game is truly finished (only 1 player with chips)
+      const majorityWinner = findMajorityWinner(data.state);
+      if (majorityWinner) {
+        console.log(`[GAME] Game finished! Winner:`, majorityWinner.model);
+        setIsPlaying(false);
+        return;
+      }
+      
+      // If phase is finished but multiple players remain, it means a hand ended
+      // The backend should have started a new hand, so continue
+      if (data.state.phase === 'finished') {
+        console.log(`[GAME] Hand finished but game continues. Starting new hand...`);
+        // The backend should have already started a new hand, so continue
       }
       
       // Continue to next action after a short delay
       setTimeout(() => {
         processNextAction(gameId);
-      }, 500);
+      }, 1000);
     } catch (error) {
-      console.error('Error processing action:', error);
+      console.error('[GAME] Error processing action:', error);
       setIsPlaying(false);
     }
   };
@@ -132,53 +191,74 @@ export default function Home() {
     }
   }, [isReplaying, playbackSpeed, stepReplay, gameState]);
 
-  // Load demo game on first visit
-  useEffect(() => {
-    // TODO: Load pre-recorded demo game
-  }, []);
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold text-center mb-8">
-          AI Poker Model Evaluation
-        </h1>
-        
-        {!gameState && (
-          <div className="flex flex-col items-center gap-8">
-            <GameControls
-              mode={mode}
-              onModeChange={setMode}
-              onStart={startGame}
-              isPlaying={isPlaying}
-            />
+    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-foreground selection:text-background">
+      <main className="max-w-6xl mx-auto px-6 py-12 sm:py-20">
+        {/* Header Section */}
+        <div className="flex flex-col items-center text-center mb-16 space-y-6">
+          <div className="inline-flex items-center px-3 py-1 rounded-full border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 text-xs font-medium text-gray-500 dark:text-gray-400 mb-4">
+            <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
+            AI Gateway Hackathon
           </div>
-        )}
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-gray-900 to-gray-600 dark:from-white dark:to-gray-400 pb-2">
+            Model Evaluation<br />Arena
+          </h1>
+          <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl leading-relaxed">
+            Watch top AI models compete in high-stakes Texas Hold'em poker. 
+            Analyze their strategic reasoning and decision-making in real-time.
+          </p>
+          
+          {!gameState && (
+            <div className="flex flex-col items-center gap-8 mt-8 animate-in fade-in slide-in-from-bottom-4 duration-1000 fill-mode-both delay-200">
+              <GameControls
+                mode={mode}
+                onModeChange={setMode}
+                onStart={startGame}
+                isPlaying={isPlaying}
+              />
+            </div>
+          )}
+        </div>
 
+        {/* Game Area */}
         {gameState && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main game area */}
-            <div className="lg:col-span-2 space-y-6">
-              <PokerTable gameState={gameState} />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in zoom-in-95 duration-500">
+            {/* Main Table */}
+            <div className="lg:col-span-8 space-y-6">
+              <div className="bg-white dark:bg-black rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/20">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span className="text-sm font-mono text-gray-500">LIVE_GAME_ID: {gameState.id.slice(0, 8)}</span>
+                  </div>
+                  <div className="text-sm font-mono text-gray-500">
+                    HAND #{gameState.handNumber}
+                  </div>
+                </div>
+                <div className="p-8">
+                  <PokerTable gameState={gameState} />
+                </div>
+              </div>
               
+              {/* Game Over Controls */}
               {gameState.phase === 'finished' && (
-                <div className="text-center">
+                <div className="flex justify-center animate-in fade-in slide-in-from-bottom-4">
                   <button
                     onClick={() => {
                       setGameState(null);
                       setIsReplaying(false);
                       setReplayActionIndex(0);
                     }}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold"
+                    className="vercel-btn vercel-btn-primary shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all"
                   >
-                    New Game
+                    Start New Game
                   </button>
                 </div>
               )}
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-6">
+            <div className="lg:col-span-4 space-y-6">
               <Leaderboard gameState={gameState} />
               <ActionLog 
                 actions={gameState.actionHistory} 
@@ -209,6 +289,11 @@ export default function Home() {
           </div>
         )}
 
+        {/* Footer */}
+        <div className="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 text-center text-sm text-gray-500">
+          <p>Built with Vercel AI SDK • Next.js • Tailwind CSS</p>
+        </div>
+
         {selectedAction && (
           <ReasoningModal
             isOpen={true}
@@ -218,7 +303,7 @@ export default function Home() {
             action={selectedAction.action}
           />
         )}
-      </div>
+      </main>
     </div>
   );
 }
