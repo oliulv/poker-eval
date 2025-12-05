@@ -9,6 +9,21 @@ import { validateAction } from '@/lib/poker/actions';
 
 const ACTION_TIMEOUT = 5000; // Faster fallback so hands keep moving
 
+function fallbackAction(player: any, gameState: any) {
+  const toCall = Math.max(0, gameState.currentBet - player.currentBet);
+  if (toCall === 0) {
+    // Open if cheap, otherwise just check
+    const raiseAmount = Math.min(gameState.bigBlind * 2, player.chips);
+    return raiseAmount > 0 ? { type: 'raise', amount: raiseAmount } : { type: 'check' };
+  }
+
+  if (toCall >= player.chips) {
+    return { type: 'all-in' };
+  }
+
+  return { type: 'call', amount: toCall };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { gameId } = await request.json();
@@ -49,60 +64,66 @@ export async function POST(request: NextRequest) {
     console.log(`[API] Player chips: ${player.chips}, Current bet: ${gameState.currentBet}, To call: ${gameState.currentBet - player.currentBet}`);
     
     const providerKey = player.model as 'openai' | 'anthropic' | 'google' | 'grok' | 'meta';
-    
-    // Skip Meta for now if not configured
-    if (providerKey === 'meta') {
-      console.log(`[API] Meta provider not configured, auto-folding`);
-      const action = { type: 'fold' };
-      const startTime = Date.now();
-      const { newState, actionLog } = applyAction(gameState, action, player.model, Date.now() - startTime);
-      saveGame(newState);
-      console.log(`[API] Action applied: fold. New phase: ${newState.phase}`);
-      return NextResponse.json({ state: newState, action: actionLog });
+    let provider: any = null;
+    let modelName: string | null = null;
+    let usedFallback = false;
+
+    if (providerKey !== 'meta') {
+      provider = getProvider(providerKey as 'openai' | 'anthropic' | 'google' | 'grok');
+      modelName = getModelName(gameState.mode, providerKey);
+    } else {
+      console.log('[API] Meta provider not configured, using fallback bot');
+      usedFallback = true;
     }
 
-    const provider = getProvider(providerKey as 'openai' | 'anthropic' | 'google' | 'grok');
-    const modelName = getModelName(gameState.mode, providerKey);
     const prompt = createActionPrompt(gameState, gameState.currentPlayerIndex);
 
     const startTime = Date.now();
     
-    // Get action with timeout
-    const actionPromise = generateText({
-      model: provider(modelName),
-      prompt,
-    });
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Timeout')), ACTION_TIMEOUT);
-    });
-
-    let actionText: string;
-    let responseTime: number;
-    
-    try {
-      const result = await Promise.race([actionPromise, timeoutPromise]);
-      actionText = result.text;
-      responseTime = Date.now() - startTime;
-    } catch (error) {
-      // Timeout or error - auto-fold
-      responseTime = ACTION_TIMEOUT;
-      actionText = JSON.stringify({ action: 'fold' });
-    }
-
-    // Parse action
     let action: { type: string; amount?: number };
-    try {
-      action = parseActionResponse(actionText);
-    } catch (error) {
-      // Invalid response - auto-fold
-      action = { type: 'fold' };
+    let responseTime: number;
+
+    if (usedFallback) {
+      action = fallbackAction(player, gameState);
+      responseTime = 50;
+    } else {
+      // Get action with timeout
+      const actionPromise = generateText({
+        model: provider(modelName),
+        prompt,
+      });
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout')), ACTION_TIMEOUT);
+      });
+
+      let actionText: string;
+      
+      try {
+        const result = await Promise.race([actionPromise, timeoutPromise]);
+        actionText = result.text;
+        responseTime = Date.now() - startTime;
+      } catch (error) {
+        // Timeout or error - use fallback instead of folding
+        responseTime = ACTION_TIMEOUT;
+        action = fallbackAction(player, gameState);
+      }
+
+      if (!action) {
+        // Parse action
+        try {
+          action = parseActionResponse(actionText);
+        } catch (error) {
+          // Invalid response - fallback
+          action = fallbackAction(player, gameState);
+        }
+      }
     }
 
     // Validate action
     if (!validateAction(action as any, player, gameState)) {
-      // Invalid action - default to fold
-      action = { type: 'fold' };
+      // Invalid action - default to sensible fallback
+      action = fallbackAction(player, gameState);
     }
 
     // Apply action
@@ -144,7 +165,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch reasoning asynchronously (don't wait)
-    fetchReasoningAsync(gameId, gameState, gameState.currentPlayerIndex, actionLog, provider, modelName);
+    if (provider && modelName) {
+      fetchReasoningAsync(gameId, gameState, gameState.currentPlayerIndex, actionLog, provider, modelName);
+    }
 
     return NextResponse.json({
       state: newState,

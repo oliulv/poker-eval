@@ -1,7 +1,7 @@
 'use client';
 
 import type { GameState } from '@/lib/types';
-import { MODEL_NAMES } from '@/lib/types';
+import { getModelDisplayName } from '@/lib/types';
 
 interface LeaderboardProps {
   gameState: GameState;
@@ -9,10 +9,10 @@ interface LeaderboardProps {
 
 export default function Leaderboard({ gameState }: LeaderboardProps) {
   const rankings = gameState.players
-    .filter(p => p.isActive)
     .map(p => ({
       model: p.model,
       chips: p.chips,
+      isActive: p.isActive,
     }))
     .sort((a, b) => b.chips - a.chips);
 
@@ -23,7 +23,11 @@ export default function Leaderboard({ gameState }: LeaderboardProps) {
         {rankings.map((player, index) => (
           <div
             key={player.model}
-            className="flex items-center justify-between p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+            className={`
+              flex items-center justify-between p-2 rounded transition-colors
+              hover:bg-gray-50 dark:hover:bg-gray-900
+              ${!player.isActive ? 'opacity-60 grayscale' : ''}
+            `}
           >
             <div className="flex items-center gap-3">
               <span className={`
@@ -35,8 +39,13 @@ export default function Leaderboard({ gameState }: LeaderboardProps) {
                 {index + 1}
               </span>
               <span className="text-sm font-medium">
-                {MODEL_NAMES[player.model as keyof typeof MODEL_NAMES]}
+                {getModelDisplayName(gameState.mode, player.model)}
               </span>
+              {!player.isActive && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">
+                  Folded
+                </span>
+              )}
             </div>
             <span className="text-sm font-mono text-gray-600 dark:text-gray-400">
               ${player.chips}

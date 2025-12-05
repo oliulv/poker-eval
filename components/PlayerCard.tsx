@@ -1,7 +1,7 @@
 'use client';
 
 import type { Player } from '@/lib/types';
-import { MODEL_NAMES } from '@/lib/types';
+import { getModelDisplayName } from '@/lib/types';
 
 interface PlayerCardProps {
   player: Player;
@@ -9,6 +9,7 @@ interface PlayerCardProps {
   isDealer: boolean;
   isSmallBlind: boolean;
   isBigBlind: boolean;
+  mode: 'fast' | 'smart';
 }
 
 const MODEL_LOGOS: Record<string, string> = {
@@ -25,7 +26,9 @@ export default function PlayerCard({
   isDealer,
   isSmallBlind,
   isBigBlind,
+  mode,
 }: PlayerCardProps) {
+  const displayName = getModelDisplayName(mode, player.model);
   const modelColor = MODEL_LOGOS[player.model] || 'bg-gray-500';
   const showCards = player.holeCards && (player.isAllIn || !player.isActive); // Only show cards if all-in or folded? Actually usually only at showdown or own cards. 
   // For observer mode, maybe we want to see cards? Let's show back of cards if active, front if showdown.
@@ -55,7 +58,7 @@ export default function PlayerCard({
           </div>
           <div className="flex flex-col overflow-hidden">
             <span className="text-xs font-bold truncate">
-              {MODEL_NAMES[player.model as keyof typeof MODEL_NAMES]}
+              {displayName}
             </span>
             <span className="text-[10px] text-gray-500 font-mono truncate">
               ${player.chips}

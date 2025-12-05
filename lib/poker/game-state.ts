@@ -257,6 +257,19 @@ export function applyAction(
     }
   }
 
+  // Bust protection: immediately mark players with zero chips as inactive for the rest of the hand
+  if (newPlayers[gameState.currentPlayerIndex].chips <= 0) {
+    newPlayers[gameState.currentPlayerIndex] = {
+      ...newPlayers[gameState.currentPlayerIndex],
+      chips: Math.max(0, newPlayers[gameState.currentPlayerIndex].chips),
+      isActive: false,
+      isAllIn: false,
+      holeCards: null,
+      currentBet: 0,
+      totalBetThisRound: 0,
+    };
+  }
+
   const updatedActionHistory = [...gameState.actionHistory, actionLog];
   const activePlayers = newPlayers.filter(p => p.isActive && p.chips > 0);
 

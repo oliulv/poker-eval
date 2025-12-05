@@ -11,17 +11,17 @@ interface PokerTableProps {
 export default function PokerTable({ gameState }: PokerTableProps) {
   // Position players around the table (5 positions)
   const positions = [
-    { top: '0%', left: '50%', transform: 'translate(-50%, -50%)' }, // Top center
-    { top: '35%', left: '0%', transform: 'translate(-50%, -50%)' }, // Left
-    { top: '85%', left: '15%', transform: 'translate(-50%, -50%)' }, // Bottom left
-    { top: '85%', left: '85%', transform: 'translate(-50%, -50%)' }, // Bottom right
-    { top: '35%', left: '100%', transform: 'translate(-50%, -50%)' }, // Right
+    { top: '8%', left: '50%', transform: 'translate(-50%, -50%)' }, // Top center
+    { top: '32%', left: '16%', transform: 'translate(-50%, -50%)' }, // Left
+    { top: '82%', left: '30%', transform: 'translate(-50%, -50%)' }, // Bottom left
+    { top: '82%', left: '70%', transform: 'translate(-50%, -50%)' }, // Bottom right
+    { top: '32%', left: '84%', transform: 'translate(-50%, -50%)' }, // Right
   ];
 
   return (
-    <div className="relative w-full aspect-[1.6/1] max-h-[600px] mx-auto my-12">
+    <div className="relative w-full max-w-[1100px] aspect-[16/9] max-h-[72vh] mx-auto my-8 sm:my-12 overflow-visible px-2">
       {/* Table Surface */}
-      <div className="absolute inset-[10%] rounded-[100px] border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shadow-inner">
+      <div className="absolute inset-[10%] rounded-[120px] border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shadow-inner">
         {/* Felt texture/pattern could go here */}
         <div className="absolute inset-0 opacity-5 bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:16px_16px]"></div>
         
@@ -50,6 +50,7 @@ export default function PokerTable({ gameState }: PokerTableProps) {
               isDealer={index === gameState.dealerIndex}
               isSmallBlind={index === gameState.smallBlindIndex}
               isBigBlind={index === gameState.bigBlindIndex}
+              mode={gameState.mode}
             />
           </div>
         );

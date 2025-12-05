@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GameState } from '@/lib/types';
 import PokerTable from '@/components/PokerTable';
 import GameControls from '@/components/GameControls';
@@ -8,6 +8,15 @@ import Leaderboard from '@/components/Leaderboard';
 import ActionLog from '@/components/ActionLog';
 import ReplayControls from '@/components/ReplayControls';
 import ReasoningModal from '@/components/ReasoningModal';
+import CreditTracker from '@/components/CreditTracker';
+
+const COST_PER_ACTION: Record<string, number> = {
+  openai: 0.002, // tweak these to match your real per-call cost
+  anthropic: 0.002,
+  google: 0.0015,
+  grok: 0.001,
+  meta: 0,
+};
 
 export default function Home() {
   const [mode, setMode] = useState<'fast' | 'smart'>('fast');
@@ -18,6 +27,9 @@ export default function Home() {
   const [replayActionIndex, setReplayActionIndex] = useState(0);
   const [selectedAction, setSelectedAction] = useState<{ index: number; model: string; action: string } | null>(null);
   const [reasoning, setReasoning] = useState<string | null>(null);
+  const [credits, setCredits] = useState<Record<string, number>>({});
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isRunningRef = useRef(false);
 
   const findMajorityWinner = (state: GameState | null) => {
     if (!state || state.players.length === 0) return null;
@@ -30,6 +42,9 @@ export default function Home() {
 
   const startGame = async () => {
     setIsPlaying(true);
+    setCredits({});
+    setErrorMessage(null);
+    isRunningRef.current = true;
     try {
       const response = await fetch('/api/game/start', {
         method: 'POST',
@@ -45,10 +60,13 @@ export default function Home() {
     } catch (error) {
       console.error('Error starting game:', error);
       setIsPlaying(false);
+      isRunningRef.current = false;
     }
   };
 
   const processNextAction = async (gameId: string) => {
+    if (!isRunningRef.current) return;
+
     try {
       console.log(`[GAME] Processing next action for game ${gameId}`);
       
@@ -58,11 +76,21 @@ export default function Home() {
         body: JSON.stringify({ gameId }),
       });
       
-      const data = await response.json();
+      let data: any;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('[GAME] Failed to parse response JSON:', jsonError);
+        setIsPlaying(false);
+        isRunningRef.current = false;
+        setErrorMessage('Failed to parse server response.');
+        return;
+      }
       
       // Check if response has error
       if (!response.ok || data.error) {
         console.error(`[GAME] API Error:`, data.error || 'Unknown error', 'Status:', response.status);
+        setErrorMessage(data.error || 'API error');
         
         // If game finished error, check if we should continue
         if (response.status === 400 && data.error === 'Game finished') {
@@ -77,16 +105,20 @@ export default function Home() {
               console.log(`[GAME] Game truly finished. Winner:`, majorityWinner.model);
               setGameState(stateData.state);
               setIsPlaying(false);
+              isRunningRef.current = false;
               return;
             }
 
             console.log(`[GAME] Game marked finished without a majority winner.`);
             setIsPlaying(false);
+            isRunningRef.current = false;
             return;
           }
         }
         
         setIsPlaying(false);
+        isRunningRef.current = false;
+        setErrorMessage('Request failed');
         return;
       }
       
@@ -94,12 +126,22 @@ export default function Home() {
       if (!data.state) {
         console.error(`[GAME] Response missing state:`, data);
         setIsPlaying(false);
+        isRunningRef.current = false;
+        setErrorMessage('Missing game state');
         return;
       }
       
       console.log(`[GAME] Action processed. Phase: ${data.state.phase}, Hand: ${data.state.handNumber}, Current Player: ${data.state.currentPlayerIndex}`);
       console.log(`[GAME] Player chips:`, data.state.players.map((p: any) => `${p.model}: ${p.chips}`).join(', '));
       
+      if (data.action && data.action.model) {
+        setCredits(prev => {
+          const current = prev[data.action.model] || 0;
+          const increment = COST_PER_ACTION[data.action.model] ?? 0.001;
+          return { ...prev, [data.action.model]: parseFloat((current + increment).toFixed(4)) };
+        });
+      }
+
       setGameState(data.state);
       
       // Check if game is truly finished (only 1 player with chips)
@@ -107,6 +149,7 @@ export default function Home() {
       if (majorityWinner) {
         console.log(`[GAME] Game finished! Winner:`, majorityWinner.model);
         setIsPlaying(false);
+        isRunningRef.current = false;
         return;
       }
       
@@ -119,11 +162,15 @@ export default function Home() {
       
       // Continue to next action after a short delay
       setTimeout(() => {
-        processNextAction(gameId);
-      }, 1000);
+        if (isRunningRef.current) {
+          processNextAction(gameId);
+        }
+      }, 250);
     } catch (error) {
       console.error('[GAME] Error processing action:', error);
       setIsPlaying(false);
+      isRunningRef.current = false;
+      setErrorMessage('Failed to fetch next action');
     }
   };
 
@@ -193,6 +240,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-foreground selection:text-background">
+      <CreditTracker credits={credits} mode={mode} />
+      {errorMessage && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-500 text-white px-4 py-2 rounded shadow">
+          {errorMessage}
+        </div>
+      )}
       <main className="max-w-6xl mx-auto px-6 py-12 sm:py-20">
         {/* Header Section */}
         <div className="flex flex-col items-center text-center mb-16 space-y-6">
@@ -261,7 +314,8 @@ export default function Home() {
             <div className="lg:col-span-4 space-y-6">
               <Leaderboard gameState={gameState} />
               <ActionLog 
-                actions={gameState.actionHistory} 
+                actions={gameState.actionHistory}
+                mode={gameState.mode}
                 onActionClick={handleActionClick}
               />
               
@@ -295,13 +349,14 @@ export default function Home() {
         </div>
 
         {selectedAction && (
-          <ReasoningModal
-            isOpen={true}
-            onClose={() => setSelectedAction(null)}
-            reasoning={reasoning}
-            model={selectedAction.model}
-            action={selectedAction.action}
-          />
+            <ReasoningModal
+              isOpen={true}
+              onClose={() => setSelectedAction(null)}
+              reasoning={reasoning}
+              model={selectedAction.model}
+              action={selectedAction.action}
+              mode={gameState?.mode || mode}
+            />
         )}
       </main>
     </div>

@@ -1,4 +1,6 @@
-'use client';
+"use client";
+
+import { getModelDisplayName } from '@/lib/types';
 
 interface ReasoningModalProps {
   isOpen: boolean;
@@ -6,6 +8,7 @@ interface ReasoningModalProps {
   reasoning: string | null;
   model: string;
   action: string;
+  mode: 'fast' | 'smart';
 }
 
 export default function ReasoningModal({
@@ -14,7 +17,21 @@ export default function ReasoningModal({
   reasoning,
   model,
   action,
+  mode,
 }: ReasoningModalProps) {
+  const deriveActionLabel = () => {
+    if (action) return action.toUpperCase();
+    if (reasoning) {
+      try {
+        const parsed = JSON.parse(reasoning);
+        if (parsed?.action) return String(parsed.action).toUpperCase();
+      } catch {
+        // ignore parse errors
+      }
+    }
+    return 'ACTION';
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -26,9 +43,9 @@ export default function ReasoningModal({
         <div className="p-6">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <h2 className="text-xl font-bold">{model}</h2>
+              <h2 className="text-xl font-bold">{getModelDisplayName(mode, model)}</h2>
               <p className="text-sm text-gray-500 uppercase tracking-wider mt-1 font-mono">
-                ACTION: <span className="text-foreground">{action}</span>
+                ACTION: <span className="text-foreground">{deriveActionLabel()}</span>
               </p>
             </div>
             <button

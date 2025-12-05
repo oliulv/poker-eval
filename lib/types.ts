@@ -103,3 +103,11 @@ export const MODEL_NAMES = {
   meta: 'Meta',
 } as const;
 
+export function getModelDisplayName(mode: 'fast' | 'smart', providerKey: string): string {
+  const provider = providerKey as keyof typeof MODEL_CONFIG.fast;
+  const modelId = MODEL_CONFIG[mode]?.[provider];
+  if (modelId) return modelId;
+  // Fallback to provider label if unknown
+  const providerName = MODEL_NAMES[provider as keyof typeof MODEL_NAMES];
+  return providerName || providerKey;
+}

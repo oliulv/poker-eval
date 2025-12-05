@@ -1,16 +1,30 @@
 'use client';
 
 import type { ActionLog as ActionLogType } from '@/lib/types';
-import { MODEL_NAMES } from '@/lib/types';
+import { getModelDisplayName } from '@/lib/types';
 
 interface ActionLogProps {
   actions: ActionLogType[];
   onActionClick?: (actionIndex: number) => void;
+  mode: 'fast' | 'smart';
 }
 
-export default function ActionLog({ actions, onActionClick }: ActionLogProps) {
-  const recentActions = actions.slice(-8).reverse();
-  const startIndex = Math.max(0, actions.length - 8);
+function deriveActionLabel(action: ActionLogType): string {
+  // Prefer logged action, but if it is missing or clearly wrong, attempt to read from reasoning JSON
+  if (action.action) return action.action.toUpperCase();
+  if (action.reasoning) {
+    try {
+      const parsed = JSON.parse(action.reasoning);
+      if (parsed?.action) return String(parsed.action).toUpperCase();
+    } catch {
+      // ignore
+    }
+  }
+  return 'ACTION';
+}
+
+export default function ActionLog({ actions, onActionClick, mode }: ActionLogProps) {
+  const orderedActions = [...actions].reverse(); // newest first
 
   return (
     <div className="vercel-card p-4 h-80 flex flex-col">
@@ -23,13 +37,13 @@ export default function ActionLog({ actions, onActionClick }: ActionLogProps) {
       </div>
       
       <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-hide">
-        {recentActions.length === 0 ? (
+        {orderedActions.length === 0 ? (
           <div className="h-full flex items-center justify-center text-xs text-gray-400 font-mono text-center">
             Waiting for game start...
           </div>
         ) : (
-          recentActions.map((action, idx) => {
-            const actualIndex = startIndex + (recentActions.length - 1 - idx);
+          orderedActions.map((action, idx) => {
+            const actualIndex = actions.length - 1 - idx;
             const isLatest = idx === 0;
             
             return (
@@ -44,10 +58,10 @@ export default function ActionLog({ actions, onActionClick }: ActionLogProps) {
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-foreground">
-                      {MODEL_NAMES[action.model as keyof typeof MODEL_NAMES]}
+                      {getModelDisplayName(mode, action.model)}
                     </span>
                     <span className={`font-mono px-1.5 py-0.5 rounded-sm bg-gray-100 dark:bg-gray-800 text-[10px] ${isLatest ? 'text-foreground' : 'text-gray-500'}`}>
-                      {action.action.toUpperCase()}
+                      {deriveActionLabel(action)}
                     </span>
                     {action.amount && (
                       <span className="font-mono text-gray-500">${action.amount}</span>
