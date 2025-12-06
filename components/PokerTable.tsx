@@ -11,11 +11,11 @@ interface PokerTableProps {
 export default function PokerTable({ gameState }: PokerTableProps) {
   // Position players around the table (5 positions)
   const positions = [
-    { top: '8%', left: '50%', transform: 'translate(-50%, -50%)' }, // Top center
-    { top: '32%', left: '16%', transform: 'translate(-50%, -50%)' }, // Left
-    { top: '82%', left: '30%', transform: 'translate(-50%, -50%)' }, // Bottom left
-    { top: '82%', left: '70%', transform: 'translate(-50%, -50%)' }, // Bottom right
-    { top: '32%', left: '84%', transform: 'translate(-50%, -50%)' }, // Right
+    { top: '10%', left: '50%', transform: 'translate(-50%, -50%)' }, // Top center
+    { top: '30%', left: '12%', transform: 'translate(-50%, -50%)' }, // Left
+    { top: '86%', left: '28%', transform: 'translate(-50%, -50%)' }, // Bottom left (pulled wider and down)
+    { top: '86%', left: '72%', transform: 'translate(-50%, -50%)' }, // Bottom right
+    { top: '30%', left: '88%', transform: 'translate(-50%, -50%)' }, // Right
   ];
 
   return (

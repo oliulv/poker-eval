@@ -105,6 +105,8 @@ export const MODEL_NAMES = {
   meta: 'Meta',
 } as const;
 
+export const MODEL_KEYS = ['openai', 'anthropic', 'google', 'grok', 'meta'] as const;
+
 export function getModelDisplayName(mode: 'fast' | 'smart', providerKey: string): string {
   const provider = providerKey as keyof typeof MODEL_CONFIG.fast;
   const modelId = MODEL_CONFIG[mode]?.[provider];

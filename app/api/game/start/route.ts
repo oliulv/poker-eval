@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: NextRequest) {
   try {
-    const { mode, actionTimeoutMs, winThreshold } = await request.json();
+    const { mode, actionTimeoutMs, winThreshold, models } = await request.json();
     
     if (mode !== 'fast' && mode !== 'smart') {
       return NextResponse.json({ error: 'Invalid mode' }, { status: 400 });
@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
     const gameState = createGame(mode, gameId, {
       actionTimeoutMs,
       winThreshold,
+      models,
     });
     const initialHand = startNewHand(gameState);
     

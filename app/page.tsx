@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GameState } from '@/lib/types';
-import { getModelDisplayName } from '@/lib/types';
+import { getModelDisplayName, MODEL_KEYS } from '@/lib/types';
 import PokerTable from '@/components/PokerTable';
 import GameControls from '@/components/GameControls';
 import Leaderboard from '@/components/Leaderboard';
@@ -35,6 +35,7 @@ export default function Home() {
   const [winThreshold, setWinThreshold] = useState<number>(0.5);
   const [winnerModel, setWinnerModel] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [selectedModels, setSelectedModels] = useState<string[]>([...MODEL_KEYS]);
 
   const findMajorityWinner = (state: GameState | null) => {
     if (!state || state.players.length === 0) return null;
@@ -51,6 +52,20 @@ export default function Home() {
     if (!isPlaying) {
       setActionTimeoutMs(newMode === 'fast' ? 500 : 4000);
     }
+    if (newMode === 'fast') {
+      setSelectedModels([...MODEL_KEYS]);
+    }
+  };
+
+  const handleToggleModel = (model: string) => {
+    setSelectedModels(prev => {
+      const exists = prev.includes(model);
+      if (exists) {
+        const next = prev.filter(m => m !== model);
+        return next.length >= 2 ? next : prev; // require at least 2
+      }
+      return [...prev, model];
+    });
   };
 
   const startGame = async () => {
@@ -63,7 +78,12 @@ export default function Home() {
       const response = await fetch('/api/game/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, actionTimeoutMs, winThreshold }),
+        body: JSON.stringify({
+          mode,
+          actionTimeoutMs,
+          winThreshold,
+          models: mode === 'smart' ? selectedModels : undefined,
+        }),
       });
       
       const data = await response.json();
@@ -333,6 +353,8 @@ export default function Home() {
                 onActionTimeoutChange={setActionTimeoutMs}
                 winThreshold={winThreshold}
                 onWinThresholdChange={setWinThreshold}
+                selectedModels={selectedModels}
+                onToggleModel={handleToggleModel}
               />
             </div>
           )}
@@ -345,18 +367,18 @@ export default function Home() {
             <div className="lg:col-span-8 space-y-6">
               <div className="bg-white dark:bg-black rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/20">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <span className="text-sm font-mono text-gray-500">LIVE_GAME_ID: {gameState.id.slice(0, 8)}</span>
-                  </div>
-                  <div className="text-sm font-mono text-gray-500">
-                    HAND #{gameState.handNumber}
-                  </div>
-                </div>
-                <div className="p-8">
-                  <PokerTable gameState={gameState} />
-                </div>
-              </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+            <span className="text-sm font-mono text-gray-500">LIVE_GAME_ID: {gameState.id.slice(0, 8)}</span>
+          </div>
+          <div className="text-sm font-mono text-gray-500">
+            HAND #{gameState.handNumber}
+          </div>
+        </div>
+        <div className="p-8">
+          <PokerTable gameState={gameState} />
+        </div>
+      </div>
               
               {/* Game Over Controls */}
               {gameState.phase === 'finished' && (

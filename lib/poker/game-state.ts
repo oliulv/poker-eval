@@ -2,8 +2,24 @@ import type { GameState, Player, Card, ActionLog } from '../types';
 import { createDeck, shuffleDeck, dealCard } from './deck';
 import { evaluateHand, compareHands } from './hand-evaluator';
 
-export function createGame(mode: 'fast' | 'smart', gameId: string, settings?: { actionTimeoutMs?: number; winThreshold?: number }): GameState {
-  const models = ['openai', 'anthropic', 'google', 'grok', 'meta'];
+export function createGame(
+  mode: 'fast' | 'smart',
+  gameId: string,
+  settings?: { actionTimeoutMs?: number; winThreshold?: number; models?: string[] }
+): GameState {
+  const MIN_THINK_MS = 200;
+  const actionTimeoutMs = settings?.actionTimeoutMs ?? (mode === 'fast' ? 500 : 5000);
+  const clampedTimeout = Math.max(actionTimeoutMs, MIN_THINK_MS);
+  const winThreshold = settings?.winThreshold ?? 0.5;
+
+  const defaultModels = ['openai', 'anthropic', 'google', 'grok', 'meta'];
+  const providedModels =
+    settings?.models && Array.isArray(settings.models)
+      ? settings.models.filter(m => defaultModels.includes(m))
+      : null;
+  const models = mode === 'smart'
+    ? (providedModels && providedModels.length >= 2 ? providedModels : defaultModels)
+    : defaultModels;
   const players: Player[] = models.map((model, index) => ({
     id: `player-${index}`,
     model,
@@ -18,8 +34,8 @@ export function createGame(mode: 'fast' | 'smart', gameId: string, settings?: { 
   return {
     id: gameId,
     mode,
-    actionTimeoutMs: settings?.actionTimeoutMs ?? (mode === 'fast' ? 500 : 5000),
-    winThreshold: settings?.winThreshold ?? 0.5,
+    actionTimeoutMs: clampedTimeout,
+    winThreshold,
     players,
     communityCards: [],
     pot: 0,

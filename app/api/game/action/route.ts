@@ -9,6 +9,7 @@ import { validateAction } from '@/lib/poker/actions';
 
 const DEFAULT_TIMEOUT_FAST = 500;
 const DEFAULT_TIMEOUT_SMART = 5000;
+const MIN_THINK_MS = 200;
 
 function fallbackAction(player: any, gameState: any) {
   const toCall = Math.max(0, gameState.currentBet - player.currentBet);
@@ -73,7 +74,10 @@ export async function POST(request: NextRequest) {
     }
 
     const prompt = createActionPrompt(gameState, gameState.currentPlayerIndex);
-    const timeoutMs = gameState.actionTimeoutMs || (gameState.mode === 'fast' ? DEFAULT_TIMEOUT_FAST : DEFAULT_TIMEOUT_SMART);
+    const timeoutMs = Math.max(
+      gameState.actionTimeoutMs || (gameState.mode === 'fast' ? DEFAULT_TIMEOUT_FAST : DEFAULT_TIMEOUT_SMART),
+      MIN_THINK_MS
+    );
 
     const startTime = Date.now();
     let action: { type: string; amount?: number } | undefined;
@@ -81,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     if (usedFallback) {
       action = fallbackAction(player, gameState);
-      responseTime = 50;
+      responseTime = timeoutMs;
     } else {
       const actionPromise = generateText({
         model: provider(modelName),
