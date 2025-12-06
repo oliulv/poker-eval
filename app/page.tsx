@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GameState } from '@/lib/types';
+import { getModelDisplayName } from '@/lib/types';
 import PokerTable from '@/components/PokerTable';
 import GameControls from '@/components/GameControls';
 import Leaderboard from '@/components/Leaderboard';
@@ -30,6 +31,10 @@ export default function Home() {
   const [credits, setCredits] = useState<Record<string, number>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const isRunningRef = useRef(false);
+  const [actionTimeoutMs, setActionTimeoutMs] = useState<number>(500);
+  const [winThreshold, setWinThreshold] = useState<number>(0.5);
+  const [winnerModel, setWinnerModel] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const findMajorityWinner = (state: GameState | null) => {
     if (!state || state.players.length === 0) return null;
@@ -37,19 +42,28 @@ export default function Home() {
     if (totalChips === 0) return null;
     const leader = state.players.reduce((current, player) => (player.chips > current.chips ? player : current), state.players[0]);
     const isUniqueLeader = state.players.filter(p => p.chips === leader.chips).length === 1;
-    return leader.chips >= totalChips / 2 && isUniqueLeader ? leader : null;
+    const threshold = state.winThreshold ?? 0.5;
+    return leader.chips >= totalChips * threshold && isUniqueLeader ? leader : null;
+  };
+
+  const handleModeChange = (newMode: 'fast' | 'smart') => {
+    setMode(newMode);
+    if (!isPlaying) {
+      setActionTimeoutMs(newMode === 'fast' ? 500 : 4000);
+    }
   };
 
   const startGame = async () => {
     setIsPlaying(true);
     setCredits({});
     setErrorMessage(null);
+    setWinnerModel(null);
     isRunningRef.current = true;
     try {
       const response = await fetch('/api/game/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify({ mode, actionTimeoutMs, winThreshold }),
       });
       
       const data = await response.json();
@@ -64,7 +78,7 @@ export default function Home() {
     }
   };
 
-  const processNextAction = async (gameId: string) => {
+  const processNextAction = useCallback(async (gameId: string) => {
     if (!isRunningRef.current) return;
 
     try {
@@ -91,6 +105,11 @@ export default function Home() {
       if (!response.ok || data.error) {
         console.error(`[GAME] API Error:`, data.error || 'Unknown error', 'Status:', response.status);
         setErrorMessage(data.error || 'API error');
+        setIsPlaying(false);
+        isRunningRef.current = false;
+        if (data.winner) {
+          setWinnerModel(data.winner);
+        }
         
         // If game finished error, check if we should continue
         if (response.status === 400 && data.error === 'Game finished') {
@@ -106,6 +125,7 @@ export default function Home() {
               setGameState(stateData.state);
               setIsPlaying(false);
               isRunningRef.current = false;
+              setWinnerModel(majorityWinner.model);
               return;
             }
 
@@ -134,11 +154,17 @@ export default function Home() {
       console.log(`[GAME] Action processed. Phase: ${data.state.phase}, Hand: ${data.state.handNumber}, Current Player: ${data.state.currentPlayerIndex}`);
       console.log(`[GAME] Player chips:`, data.state.players.map((p: any) => `${p.model}: ${p.chips}`).join(', '));
       
-      if (data.action && data.action.model) {
+      const returnedActions = data.actions || (data.action ? [data.action] : []);
+      if (returnedActions.length > 0) {
         setCredits(prev => {
-          const current = prev[data.action.model] || 0;
-          const increment = COST_PER_ACTION[data.action.model] ?? 0.001;
-          return { ...prev, [data.action.model]: parseFloat((current + increment).toFixed(4)) };
+          const updates = { ...prev };
+          returnedActions.forEach((act: any) => {
+            if (!act?.model) return;
+            const current = updates[act.model] || 0;
+            const increment = COST_PER_ACTION[act.model] ?? 0.001;
+            updates[act.model] = parseFloat((current + increment).toFixed(4));
+          });
+          return updates;
         });
       }
 
@@ -150,6 +176,7 @@ export default function Home() {
         console.log(`[GAME] Game finished! Winner:`, majorityWinner.model);
         setIsPlaying(false);
         isRunningRef.current = false;
+        setWinnerModel(majorityWinner.model);
         return;
       }
       
@@ -165,14 +192,14 @@ export default function Home() {
         if (isRunningRef.current) {
           processNextAction(gameId);
         }
-      }, 250);
+      }, mode === 'fast' ? 200 : 400);
     } catch (error) {
       console.error('[GAME] Error processing action:', error);
       setIsPlaying(false);
       isRunningRef.current = false;
       setErrorMessage('Failed to fetch next action');
     }
-  };
+  }, [findMajorityWinner, mode]);
 
   const fetchReasoning = async (actionIndex: number) => {
     if (!gameState) return;
@@ -194,9 +221,43 @@ export default function Home() {
       
       const data = await response.json();
       setReasoning(data.reasoning);
+      // Persist reasoning locally so we don't refetch
+      setGameState(prev => {
+        if (!prev) return prev;
+        const updated = { ...prev, actionHistory: [...prev.actionHistory] };
+        if (updated.actionHistory[actionIndex]) {
+          updated.actionHistory[actionIndex] = {
+            ...updated.actionHistory[actionIndex],
+            reasoning: data.reasoning,
+          };
+        }
+        return updated;
+      });
     } catch (error) {
       console.error('Error fetching reasoning:', error);
       setReasoning('Failed to load reasoning');
+    }
+  };
+
+  const saveDemoGame = async () => {
+    if (!gameState) return;
+    try {
+      setSaveMessage('Saving...');
+      const response = await fetch('/api/game/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameId: gameState.id, name: `Demo ${new Date().toISOString()}` }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save');
+      }
+      setSaveMessage('Saved demo game');
+      setTimeout(() => setSaveMessage(null), 2000);
+    } catch (error) {
+      console.error('Error saving demo:', error);
+      setSaveMessage('Save failed');
+      setTimeout(() => setSaveMessage(null), 2000);
     }
   };
 
@@ -265,9 +326,13 @@ export default function Home() {
             <div className="flex flex-col items-center gap-8 mt-8 animate-in fade-in slide-in-from-bottom-4 duration-1000 fill-mode-both delay-200">
               <GameControls
                 mode={mode}
-                onModeChange={setMode}
+                onModeChange={handleModeChange}
                 onStart={startGame}
                 isPlaying={isPlaying}
+                actionTimeoutMs={actionTimeoutMs}
+                onActionTimeoutChange={setActionTimeoutMs}
+                winThreshold={winThreshold}
+                onWinThresholdChange={setWinThreshold}
               />
             </div>
           )}
@@ -295,17 +360,26 @@ export default function Home() {
               
               {/* Game Over Controls */}
               {gameState.phase === 'finished' && (
-                <div className="flex justify-center animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex flex-col sm:flex-row gap-3 justify-center items-center animate-in fade-in slide-in-from-bottom-4">
                   <button
                     onClick={() => {
                       setGameState(null);
                       setIsReplaying(false);
                       setReplayActionIndex(0);
+                      setWinnerModel(null);
+                      setSaveMessage(null);
                     }}
                     className="vercel-btn vercel-btn-primary shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all"
                   >
                     Start New Game
                   </button>
+                  <button
+                    onClick={saveDemoGame}
+                    className="vercel-btn shadow-sm hover:shadow-md"
+                  >
+                    Save as Demo
+                  </button>
+                  {saveMessage && <span className="text-xs text-gray-500">{saveMessage}</span>}
                 </div>
               )}
             </div>
@@ -349,14 +423,43 @@ export default function Home() {
         </div>
 
         {selectedAction && (
-            <ReasoningModal
-              isOpen={true}
-              onClose={() => setSelectedAction(null)}
-              reasoning={reasoning}
-              model={selectedAction.model}
-              action={selectedAction.action}
-              mode={gameState?.mode || mode}
-            />
+          <ReasoningModal
+            isOpen={true}
+            onClose={() => setSelectedAction(null)}
+            reasoning={reasoning}
+            model={selectedAction.model}
+            action={selectedAction.action}
+            mode={gameState?.mode || mode}
+          />
+        )}
+
+        {winnerModel && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="vercel-card max-w-md w-full text-center space-y-4">
+              <h3 className="text-xl font-bold">Winner</h3>
+              <p className="text-lg">
+                {getModelDisplayName(gameState?.mode || mode, winnerModel)} takes the pot!
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => setWinnerModel(null)}
+                  className="vercel-btn w-full sm:w-auto"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setWinnerModel(null);
+                    setGameState(null);
+                    setIsPlaying(false);
+                  }}
+                  className="vercel-btn vercel-btn-primary w-full sm:w-auto"
+                >
+                  Start New Game
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

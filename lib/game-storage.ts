@@ -1,8 +1,18 @@
 import type { GameState, GameLog, ActionLog } from './types';
+import fs from 'fs/promises';
+import path from 'path';
 
 // In-memory storage (can be replaced with database)
 const games = new Map<string, GameState>();
 const gameLogs = new Map<string, GameLog>();
+
+export interface DemoGameEntry {
+  name: string;
+  log: GameLog;
+  savedAt: number;
+}
+
+const DEMO_PATH = path.join(process.cwd(), 'data', 'demo-games.json');
 
 export function saveGame(gameState: GameState): void {
   games.set(gameState.id, gameState);
@@ -88,3 +98,27 @@ export function buildGameLog(gameState: GameState): GameLog {
   };
 }
 
+async function readDemoGames(): Promise<DemoGameEntry[]> {
+  try {
+    const raw = await fs.readFile(DEMO_PATH, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as DemoGameEntry[];
+    if (parsed && Array.isArray(parsed.demos)) return parsed.demos as DemoGameEntry[];
+    return [];
+  } catch (error: any) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
+export async function saveDemoGameLog(gameLog: GameLog, name: string): Promise<DemoGameEntry[]> {
+  const demos = await readDemoGames();
+  demos.push({ name, log: gameLog, savedAt: Date.now() });
+  await fs.mkdir(path.dirname(DEMO_PATH), { recursive: true });
+  await fs.writeFile(DEMO_PATH, JSON.stringify(demos, null, 2), 'utf-8');
+  return demos;
+}
+
+export async function getDemoGames(): Promise<DemoGameEntry[]> {
+  return readDemoGames();
+}

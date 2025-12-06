@@ -3,7 +3,11 @@ import type { Player, Action, GameState } from '../types';
 export function getValidActions(player: Player, gameState: GameState): Action[] {
   const actions: Action[] = [];
   const toCall = gameState.currentBet - player.currentBet;
-  const canRaise = player.chips > toCall;
+  const minRaiseSize =
+    gameState.mode === 'fast'
+      ? Math.max(gameState.bigBlind * 2, Math.floor(player.chips * 0.05))
+      : gameState.bigBlind;
+  const canRaise = player.chips > toCall + minRaiseSize;
   
   // Can always fold
   actions.push({ type: 'fold' });
@@ -20,7 +24,7 @@ export function getValidActions(player: Player, gameState: GameState): Action[] 
   
   // Can raise if have chips beyond call
   if (canRaise) {
-    const minRaise = gameState.bigBlind;
+    const minRaise = minRaiseSize;
     const maxRaise = player.chips;
     // For simplicity, allow raises in increments of big blind
     for (let amount = toCall + minRaise; amount <= maxRaise; amount += gameState.bigBlind) {
@@ -55,7 +59,10 @@ export function validateAction(action: Action, player: Player, gameState: GameSt
   if (action.type === 'raise') {
     if (!action.amount) return false;
     const toCall = gameState.currentBet - player.currentBet;
-    const minRaise = gameState.bigBlind;
+    const minRaise =
+      gameState.mode === 'fast'
+        ? Math.max(gameState.bigBlind * 2, Math.floor(player.chips * 0.05))
+        : gameState.bigBlind;
     return action.amount >= toCall + minRaise && action.amount <= player.chips;
   }
   
@@ -65,4 +72,3 @@ export function validateAction(action: Action, player: Player, gameState: GameSt
   
   return false;
 }
-

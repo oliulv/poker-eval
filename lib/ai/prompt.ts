@@ -14,7 +14,7 @@ export function createActionPrompt(gameState: GameState, playerIndex: number): s
       isAllIn: p.isAllIn,
     }));
 
-  const prompt = `You are a professional poker player competing in a high-stakes tournament. Your goal is to win chips and eliminate opponents.
+  const prompt = `You are a professional poker player competing in a high-stakes texas hold'em tournament. Your goal is to win chips and eliminate opponents.
 
 GAME STATE:
 - Phase: ${gameState.phase}
@@ -44,12 +44,6 @@ ${gameState.actionHistory
   .slice(-5)
   .map(a => `${a.model}: ${a.action}${a.amount ? ` (${a.amount})` : ''}`)
   .join('\n') || 'None'}
-
-IMPORTANT STRATEGY RULES:
-1. DO NOT FOLD unless your hand is terrible AND there is a significant bet to call.
-2. If the "Amount needed to call" is 0, you should CHECK (do not fold).
-3. In PREFLOP, play loosely. Do not fold automatically.
-4. Bluff occasionally if you have a strong position or chip lead.
 
 Respond with ONLY a JSON object in this exact format (no markdown, no code blocks):
 {

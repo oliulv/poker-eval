@@ -27,6 +27,8 @@ export interface Player {
 export interface GameState {
   id: string;
   mode: 'fast' | 'smart';
+  actionTimeoutMs: number;
+  winThreshold: number; // 0-1 fraction of total chips to declare winner
   players: Player[];
   communityCards: Card[];
   pot: number;

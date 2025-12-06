@@ -2,7 +2,7 @@ import type { GameState, Player, Card, ActionLog } from '../types';
 import { createDeck, shuffleDeck, dealCard } from './deck';
 import { evaluateHand, compareHands } from './hand-evaluator';
 
-export function createGame(mode: 'fast' | 'smart', gameId: string): GameState {
+export function createGame(mode: 'fast' | 'smart', gameId: string, settings?: { actionTimeoutMs?: number; winThreshold?: number }): GameState {
   const models = ['openai', 'anthropic', 'google', 'grok', 'meta'];
   const players: Player[] = models.map((model, index) => ({
     id: `player-${index}`,
@@ -18,6 +18,8 @@ export function createGame(mode: 'fast' | 'smart', gameId: string): GameState {
   return {
     id: gameId,
     mode,
+    actionTimeoutMs: settings?.actionTimeoutMs ?? (mode === 'fast' ? 500 : 5000),
+    winThreshold: settings?.winThreshold ?? 0.5,
     players,
     communityCards: [],
     pot: 0,
@@ -35,7 +37,7 @@ export function createGame(mode: 'fast' | 'smart', gameId: string): GameState {
   };
 }
 
-export function getMajorityWinner(players: Player[], pot: number): Player | null {
+export function getMajorityWinner(players: Player[], pot: number, threshold = 0.5): Player | null {
   const totalChips = players.reduce((sum, p) => sum + p.chips, 0) + pot;
   if (totalChips === 0) return null;
 
@@ -46,7 +48,7 @@ export function getMajorityWinner(players: Player[], pot: number): Player | null
 
   if (
     leader &&
-    leader.chips >= totalChips / 2 &&
+    leader.chips >= totalChips * threshold &&
     players.filter(p => p.chips === leader.chips).length === 1
   ) {
     return leader;
@@ -68,7 +70,7 @@ export function startNewHand(gameState: GameState): GameState {
     };
   });
 
-  const majorityWinner = getMajorityWinner(resetPlayers, gameState.pot);
+  const majorityWinner = getMajorityWinner(resetPlayers, gameState.pot, gameState.winThreshold);
   if (majorityWinner) {
     console.log(`[GAME-STATE] ${majorityWinner.model} controls >=50% of chips, game finished`);
     return {
@@ -79,6 +81,16 @@ export function startNewHand(gameState: GameState): GameState {
       communityCards: [],
       phase: 'finished',
     };
+  }
+
+  // Blind escalation for fast mode: double every 5 hands
+  let smallBlind = gameState.smallBlind;
+  let bigBlind = gameState.bigBlind;
+  if (gameState.mode === 'fast') {
+    const level = Math.floor((gameState.handNumber) / 5); // handNumber increments before new hand
+    const baseSmall = 10;
+    smallBlind = baseSmall * Math.pow(2, level);
+    bigBlind = smallBlind * 2;
   }
 
   const activePlayers = resetPlayers.filter(p => p.isActive);
@@ -136,8 +148,8 @@ export function startNewHand(gameState: GameState): GameState {
   // Post blinds
   const smallBlindPlayer = newPlayers[nextSmallBlind];
   const bigBlindPlayer = newPlayers[nextBigBlind];
-  const smallBlindAmount = Math.min(gameState.smallBlind, smallBlindPlayer.chips);
-  const bigBlindAmount = Math.min(gameState.bigBlind, bigBlindPlayer.chips);
+  const smallBlindAmount = Math.min(smallBlind, smallBlindPlayer.chips);
+  const bigBlindAmount = Math.min(bigBlind, bigBlindPlayer.chips);
 
   newPlayers[nextSmallBlind] = {
     ...smallBlindPlayer,
@@ -176,6 +188,8 @@ export function startNewHand(gameState: GameState): GameState {
     currentPlayerIndex: currentPlayer,
     phase: 'preflop',
     handNumber: gameState.handNumber + 1,
+    smallBlind,
+    bigBlind,
   };
 }
 
